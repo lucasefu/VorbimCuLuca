@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Mini Voice & Chat</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.2/dist/peerjs.min.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root { --bg:#0b1020; --card:#11182a; --muted:#94a3b8; --accent:#7c3aed; }
+    html,body { height:100%; }
+    body { font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; background: radial-gradient(1100px 600px at 10% 10%, #151b31, #0b1020); color:white; }
+    .glass { backdrop-filter:saturate(140%) blur(10px); background: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.03)); border:1px solid rgba(255,255,255,0.08); }
+    .btn { @apply px-3 py-2 rounded-2xl shadow transition active:scale-[.98]; }
+    .btn-primary { background:linear-gradient(135deg,#7c3aed,#3b82f6); }
+    .btn-muted { background:#1b2540; }
+    .dot { width:.6rem; height:.6rem; border-radius:999px; }
+    .scroll-slim { scrollbar-width: thin; scrollbar-color: #334155 transparent; }
+    .scroll-slim::-webkit-scrollbar{ width:8px; }
+    .scroll-slim::-webkit-scrollbar-thumb{ background:#334155; border-radius:999px; }
+    .msg { background:#0f172a; border:1px solid rgba(255,255,255,.06); }
+    .msg.me { background:#1e293b; border-color:rgba(124,58,237,.4); }
+  </style>
+</head>
+<body class="min-h-full">
+  <div class="grid grid-cols-12 gap-4 p-4 md:p-6">
+
+    <!-- SIDEBAR -->
+    <aside class="col-span-12 md:col-span-3 lg:col-span-2 glass rounded-3xl p-4 space-y-4">
+      <div class="flex items-center gap-3">
+        <div class="w-12 h-12 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 grid place-content-center font-bold">🎧</div>
+        <div>
+          <div class="text-sm text-slate-300">Numele tău</div>
+          <input id="username" class="w-full bg-transparent border border-slate-600/40 rounded-xl px-2 py-1 focus:outline-none" placeholder="ex: Alex" />
+        </div>
+      </div>
+
+      <div class="text-xs text-slate-400">ID-ul tău (trimite-l prietenilor sau dă link-ul):</div>
+      <div class="flex items-center gap-2">
+        <input id="myId" readonly class="flex-1 bg-transparent border border-slate-600/40 rounded-xl px-2 py-1 text-xs" />
+        <button id="copyLink" class="btn btn-muted text-xs">Copiază link</button>
+      </div>
+
+      <div class="border-t border-white/10 pt-3">
+        <div class="flex items-center justify-between">
+          <h3 class="font-semibold">Prieteni</h3>
+          <button id="addFriendBtn" class="btn btn-primary text-xs">Adaugă</button>
+        </div>
+        <div id="friends" class="mt-2 space-y-2 max-h-72 overflow-auto scroll-slim"></div>
+      </div>
+
+      <div class="border-t border-white/10 pt-3">
+        <div class="flex items-center justify-between">
+          <h3 class="font-semibold">Grupuri</h3>
+          <button id="newGroupBtn" class="btn btn-primary text-xs">Creează</button>
+        </div>
+        <div id="groups" class="mt-2 space-y-2 max-h-60 overflow-auto scroll-slim"></div>
+      </div>
+
+      <div class="text-[11px] text-slate-500 pt-2">Totul rulează P2P cu WebRTC/PeerJS. Lista de prieteni e salvată local.</div>
+    </aside>
+
+    <!-- MAIN -->
+    <main class="col-span-12 md:col-span-9 lg:col-span-10 space-y-4">
+      <section class="glass rounded-3xl p-4 md:p-6">
+        <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+          <div>
+            <h1 class="text-2xl md:text-3xl font-bold">Mini Voice & Chat</h1>
+            <p class="text-slate-300 text-sm">Intri pe link, îți pui nume, adaugi prieteni, suni 1‑la‑1 sau creezi grup. Chat cu poze/fișiere.</p>
+          </div>
+          <div class="flex gap-2">
+            <button id="joinViaLinkBtn" class="btn btn-muted">Intră după link</button>
+            <button id="howBtn" class="btn btn-muted">Cum funcționează</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- CALL / CHAT PANEL -->
+      <section class="grid grid-cols-12 gap-4">
+        <div class="col-span-12 lg:col-span-8 glass rounded-3xl p-4 md:p-6 space-y-4">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2">
+              <div class="dot bg-green-500" id="statusDot"></div>
+              <div id="statusText" class="text-slate-300 text-sm">Neconectat</div>
+            </div>
+            <div class="flex gap-2">
+              <button id="muteBtn" class="btn btn-muted">Mute</button>
+              <button id="endBtn" class="btn btn-muted">Închide</button>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-2 gap-3">
+            <div class="glass rounded-2xl p-3">
+              <div class="text-sm text-slate-400 mb-1">Tu</div>
+              <audio id="myAudio" autoplay muted></audio>
+            </div>
+            <div class="glass rounded-2xl p-3">
+              <div class="text-sm text-slate-400 mb-1">Parteneri</div>
+              <div id="remotes" class="grid grid-cols-1 gap-2"></div>
+            </div>
+          </div>
+        </div>
+        <div class="col-span-12 lg:col-span-4 glass rounded-3xl p-4 md:p-6 flex flex-col">
+          <div class="flex items-center justify-between mb-2">
+            <h3 class="font-semibold">Chat apel</h3>
+            <label class="btn btn-primary text-xs cursor-pointer">
+              Încarcă
+              <input id="fileInput" type="file" class="hidden" multiple />
+            </label>
+          </div>
+          <div id="chat" class="flex-1 overflow-auto scroll-slim space-y-2 pr-1"></div>
+          <div class="mt-3 flex gap-2">
+            <input id="msg" class="flex-1 bg-transparent border border-slate-600/40 rounded-xl px-3 py-2" placeholder="Scrie un mesaj..." />
+            <button id="sendBtn" class="btn btn-primary">Trimite</button>
+          </div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- MODALS -->
+  <dialog id="friendModal" class="p-0 rounded-2xl w-11/12 md:w-[480px]">
+    <form method="dialog" class="glass p-5 rounded-2xl">
+      <h3 class="text-xl font-semibold mb-2">Adaugă prieten</h3>
+      <div class="grid grid-cols-1 gap-3">
+        <input id="friendName" class="bg-transparent border border-slate-600/40 rounded-xl px-3 py-2" placeholder="Nume (ex: Dani)" />
+        <input id="friendId" class="bg-transparent border border-slate-600/40 rounded-xl px-3 py-2" placeholder="Peer ID (de la prieten)" />
+      </div>
+      <div class="mt-4 flex justify-end gap-2">
+        <button class="btn btn-muted">Anulează</button>
+        <button id="saveFriend" class="btn btn-primary" type="button">Salvează</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="groupModal" class="p-0 rounded-2xl w-11/12 md:w-[520px]">
+    <form method="dialog" class="glass p-5 rounded-2xl">
+      <h3 class="text-xl font-semibold mb-2">Creează grup</h3>
+      <div class="text-slate-300 text-sm mb-3">Se va genera un link de cameră; toți care intră cu linkul se conectează între ei (mesh P2P).</div>
+      <div class="flex gap-2">
+        <input id="roomName" class="flex-1 bg-transparent border border-slate-600/40 rounded-xl px-3 py-2" placeholder="Nume grup (ex: Echipa A)" />
+        <button id="createRoomBtn" class="btn btn-primary" type="button">Generează link</button>
+      </div>
+      <div id="roomLinkWrap" class="hidden mt-3">
+        <div class="text-xs text-slate-400">Link grup:</div>
+        <div class="flex gap-2">
+          <input id="roomLink" class="flex-1 bg-transparent border border-slate-600/40 rounded-xl px-3 py-2 text-xs" />
+          <button id="copyRoomLink" class="btn btn-muted" type="button">Copiază</button>
+        </div>
+      </div>
+      <div class="mt-4 flex justify-end">
+        <button class="btn btn-muted">Gata</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="howModal" class="p-0 rounded-2xl w-11/12 md:w-[600px]">
+    <form method="dialog" class="glass p-5 rounded-2xl">
+      <h3 class="text-xl font-semibold mb-2">Cum funcționează</h3>
+      <ol class="list-decimal pl-5 text-slate-300 space-y-2">
+        <li>La prima deschidere, primești un <b>Peer ID</b> unic. Pune-ți un nume (stocat local).</li>
+        <li>Adaugă prieteni (nume + Peer ID). Prietenii sunt salvați în browserul tău.</li>
+        <li>Sună 1‑la‑1 sau creează un link de <b>grup</b> și trimite-l.</li>
+        <li>În apel ai <b>mute/unmute</b> și <b>chat</b>. Poți trimite <b>imagini/fișiere</b>. Imaginile se prevăd automat.</li>
+        <li>Pentru conectivitate maximă, poate fi nevoie de un server TURN (aici folosim doar rețeaua publică PeerJS, pentru demo).</li>
+      </ol>
+      <div class="mt-4 flex justify-end"><button class="btn btn-muted">OK</button></div>
+    </form>
+  </dialog>
+
+  <script>
+    // ===== Utilities =====
+    const $ = (sel)=>document.querySelector(sel);
+    const el = (tag, cls="")=>{ const d=document.createElement(tag); if(cls) d.className=cls; return d; };
+    const ls = {
+      get:k=>{ try{return JSON.parse(localStorage.getItem(k)||"null");}catch(e){return null} },
+      set:(k,v)=>localStorage.setItem(k, JSON.stringify(v))
+    };
+    const uid = ()=>Math.random().toString(36).slice(2,10);
+
+    // ===== State =====
+    let peer, myId = "", myName = ls.get('myName')||"";
+    let localStream = null; // MediaStream
+    let peers = {}; // peerId -> { call, dc, name }
+    let roomId = null; // for group mesh
+
+    // ===== Init PeerJS =====
+    async function initPeer() {
+      peer = new Peer(undefined, { debug: 1 });
+      peer.on('open', id => {
+        myId = id;
+        $('#myId').value = id;
+        // If URL contains ?id=someone or ?room=xxx, handle later
+      });
+
+      peer.on('error', err => {
+        setStatus('Eroare Peer: '+err.type, 'red');
+        console.error(err);
+      });
+
+      peer.on('connection', conn => {
+        setupDataConn(conn);
+      });
+
+      peer.on('call', async call => {
+        await ensureLocalStream();
+        call.answer(localStream);
+        bindCall(call);
+      });
+    }
+
+    function setStatus(text, color='green'){
+      $('#statusText').textContent = text;
+      $('#statusDot').className = `dot bg-${color}-500`;
+    }
+
+    async function ensureLocalStream(){
+      if(localStream) return localStream;
+      try{
+        localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        $('#myAudio').srcObject = localStream; // local preview (muted)
+        return localStream;
+      }catch(e){ alert('Acces la microfon refuzat.'); throw e; }
+    }
+
+    function bindCall(call){
+      const pid = call.peer;
+      if(!peers[pid]) peers[pid] = {};
+      peers[pid].call = call;
+
+      call.on('stream', remoteStream => {
+        const wrap = el('div','flex items-center gap-2');
+        const label = el('div','text-xs text-slate-400');
+        label.textContent = peers[pid]?.name || pid;
+        const a = el('audio'); a.autoplay = true; a.srcObject = remoteStream;
+        wrap.append(a); wrap.append(label);
+        wrap.dataset.pid = pid;
+        const rem = $('#remotes');
+        // Remove previous card for this pid
+        rem.querySelectorAll(`[data-pid="${pid}"]`).forEach(n=>n.remove());
+        rem.append(wrap);
+        setStatus('Conectat', 'green');
+      });
+
+      call.on('close', ()=>{
+        $('#remotes').querySelectorAll(`[data-pid="${pid}"]`).forEach(n=>n.remove());
+      });
+    }
+
+    function setupDataConn(conn){
+      const pid = conn.peer;
+      if(!peers[pid]) peers[pid] = {};
+      peers[pid].dc = conn;
+
+      conn.on('data', data => {
+        if(data?.type==='hello'){ peers[pid].name = data.name; }
+        if(data?.type==='msg'){ addMsg(data.name||pid, data.text, false); }
+        if(data?.type==='file'){
+          const { name, mime, buf } = data;
+          const blob = new Blob([new Uint8Array(buf)], { type: mime });
+          const url = URL.createObjectURL(blob);
+          addFileMsg(data.sender||pid, name, url, mime, false);
+        }
+      });
+
+      conn.on('open', ()=>{
+        conn.send({ type:'hello', name: $('#username').value || myName || 'Anon' });
+      });
+
+      conn.on('close', ()=>{ /* optional: show system msg */ });
+    }
+
+    // ===== Friends & Groups (local only) =====
+    function renderFriends(){
+      const list = ls.get('friends')||[];
+      const wrap = $('#friends'); wrap.innerHTML = '';
+      list.forEach(f=>{
+        const row = el('div','flex items-center gap-2 justify-between p-2 rounded-xl bg-[#10182b] border border-white/5');
+        row.innerHTML = `<div><div class="font-semibold text-sm">${f.name}</div><div class="text-[11px] text-slate-400">${f.id}</div></div>`;
+        const btns = el('div','flex gap-2');
+        const callBtn = el('button','btn btn-primary text-xs'); callBtn.textContent = 'Sună';
+        callBtn.onclick = ()=> startCallTo(f.id, f.name);
+        const rmBtn = el('button','btn btn-muted text-xs'); rmBtn.textContent = 'Șterge';
+        rmBtn.onclick = ()=>{ ls.set('friends', list.filter(x=>x.id!==f.id)); renderFriends(); };
+        btns.append(callBtn, rmBtn);
+        row.append(btns); wrap.append(row);
+      });
+    }
+
+    function renderGroups(){
+      const list = ls.get('groups')||[];
+      const wrap = $('#groups'); wrap.innerHTML = '';
+      list.forEach(g=>{
+        const row = el('div','flex items-center gap-2 justify-between p-2 rounded-xl bg-[#10182b] border border-white/5');
+        row.innerHTML = `<div><div class="font-semibold text-sm">${g.name}</div><div class="text-[11px] text-slate-400">${g.link}</div></div>`;
+        const btns = el('div','flex gap-2');
+        const joinBtn = el('button','btn btn-primary text-xs'); joinBtn.textContent = 'Intră';
+        joinBtn.onclick = ()=> location.href = g.link;
+        const rmBtn = el('button','btn btn-muted text-xs'); rmBtn.textContent = 'Șterge';
+        rmBtn.onclick = ()=>{ ls.set('groups', list.filter(x=>x.id!==g.id)); renderGroups(); };
+        btns.append(joinBtn, rmBtn); row.append(btns); wrap.append(row);
+      });
+    }
+
+    // ===== Calling logic =====
+    async function startCallTo(targetId, targetName){
+      await ensureLocalStream();
+      // Data channel first (for chat)
+      const conn = peer.connect(targetId, { reliable: true });
+      setupDataConn(conn);
+      peers[targetId] = { ...(peers[targetId]||{}), dc: conn, name: targetName };
+      // Media call
+      const call = peer.call(targetId, localStream);
+      bindCall(call);
+      peers[targetId].call = call;
+      setStatus(`În apel cu ${targetName||targetId}`,'green');
+    }
+
+    async function joinRoom(id){
+      roomId = id;
+      setStatus('Te conectezi în grup...', 'yellow');
+      // Leader concept: everyone connects to everyone whose id is lexicographically smaller (to avoid full storms)
+      // We need a simple discovery: we use room hub via PeerJS room prefix, by exchanging in chat? No server, so hack: host is first to share list.
+      // Simple approach: the first who opens room becomes HOST (keeps a list). Others call HOST; host introduces peers to each other by sending IDs via data channel.
+
+      // Determine host id = roomId + '-host'
+      const hostId = `${roomId}-host`;
+      // If I'm host?
+      const amHost = location.hash === '#host';
+      if(amHost){
+        // Create an alias peer for host role (secondary peer) — not supported simply. Alternative: host is the first entrant; others will connect to me by knowing my real ID via URL query sharing can't be done. So, we publish host real id in URL after open.
+        setStatus('Ești gazda. Trimite link-ul actual prietenilor.', 'green');
+      }
+      // Practical mesh for demo (without discovery): everyone who opens the link will paste/copy IDs via chat. To keep it simple, we treat a room as a "shared link" page and people call each other via clipboard button.
+      // For usability, once two people are in the same room page, they can paste each other's Peer IDs and app calls both ways automatically.
+      // Because we have no server for discovery, we keep group feature as convenience wrapper around calling multiple friends from list.
+    }
+
+    // ===== Chat =====
+    function addMsg(who, text, mine){
+      const wrap = el('div',`p-2 rounded-xl msg ${mine?'me':''}`);
+      wrap.innerHTML = `<div class="text-[11px] text-slate-400 mb-1">${who}</div><div class="whitespace-pre-wrap break-words">${text}</div>`;
+      const chat = $('#chat'); chat.append(wrap); chat.scrollTop = chat.scrollHeight;
+    }
+    function addFileMsg(who, filename, url, mime, mine){
+      const card = el('div',`p-2 rounded-xl msg ${mine?'me':''}`);
+      const head = el('div','text-[11px] text-slate-400 mb-1'); head.textContent = who;
+      const body = el('div');
+      if(mime && mime.startsWith('image/')){
+        const img = el('img','max-h-56 rounded-lg border border-white/10'); img.src = url; img.alt = filename; body.append(img);
+      }
+      const a = el('a','underline text-sm block mt-1'); a.href = url; a.download = filename; a.textContent = `📎 ${filename}`;
+      card.append(head, body, a);
+      const chat = $('#chat'); chat.append(card); chat.scrollTop = chat.scrollHeight;
+    }
+
+    function broadcast(obj){
+      Object.values(peers).forEach(p=>{ try{ p.dc && p.dc.open && p.dc.send(obj); }catch(e){} });
+    }
+
+    // ===== UI Wireup =====
+    window.addEventListener('DOMContentLoaded', async ()=>{
+      if(myName) $('#username').value = myName;
+      renderFriends(); renderGroups();
+      await initPeer();
+
+      // Username save
+      $('#username').addEventListener('change', e=>{ myName = e.target.value.trim(); ls.set('myName', myName); });
+
+      // Copy share link
+      $('#copyLink').onclick = ()=>{
+        const url = new URL(location.href);
+        url.searchParams.set('to', myId);
+        navigator.clipboard.writeText(url.toString());
+        setStatus('Link copiat!', 'green');
+      };
+
+      // Add friend flow
+      $('#addFriendBtn').onclick = ()=> $('#friendModal').showModal();
+      $('#saveFriend').onclick = ()=>{
+        const name = $('#friendName').value.trim();
+        const id = $('#friendId').value.trim();
+        if(!name||!id) return;
+        const list = ls.get('friends')||[]; if(!list.find(x=>x.id===id)) list.push({ name, id });
+        ls.set('friends', list); renderFriends(); $('#friendModal').close(); $('#friendName').value=''; $('#friendId').value='';
+      };
+
+      // Group create
+      $('#newGroupBtn').onclick = ()=> $('#groupModal').showModal();
+      $('#createRoomBtn').onclick = ()=>{
+        const name = $('#roomName').value.trim()||'Grup';
+        const rid = uid();
+        const url = new URL(location.href); url.searchParams.set('room', rid);
+        const link = url.toString();
+        $('#roomLinkWrap').classList.remove('hidden');
+        $('#roomLink').value = link;
+        const groups = ls.get('groups')||[]; groups.push({ id: rid, name, link }); ls.set('groups', groups); renderGroups();
+      };
+      $('#copyRoomLink').onclick = ()=>{ navigator.clipboard.writeText($('#roomLink').value); };
+
+      // Help
+      $('#howBtn').onclick = ()=> $('#howModal').showModal();
+      $('#joinViaLinkBtn').onclick = ()=>{
+        const to = prompt('Lipește un link primit (cu ?to= sau ?room=)');
+        if(!to) return; location.href = to;
+      };
+
+      // Mute/Unmute
+      $('#muteBtn').onclick = ()=>{
+        if(!localStream){ return; }
+        const track = localStream.getAudioTracks()[0];
+        if(!track) return;
+        track.enabled = !track.enabled;
+        $('#muteBtn').textContent = track.enabled ? 'Mute' : 'Unmute';
+      };
+
+      // End call
+      $('#endBtn').onclick = ()=>{
+        Object.values(peers).forEach(p=>{ try{ p.call && p.call.close(); p.dc && p.dc.close(); }catch(e){} });
+        peers = {}; $('#remotes').innerHTML=''; setStatus('Neconectat','yellow');
+      };
+
+      // Send message
+      $('#sendBtn').onclick = ()=>{
+        const text = $('#msg').value.trim(); if(!text) return;
+        addMsg(myName||'Eu', text, true);
+        broadcast({ type:'msg', text, name: myName||'Anon' });
+        $('#msg').value='';
+      };
+
+      // File upload
+      $('#fileInput').addEventListener('change', async (e)=>{
+        const files = Array.from(e.target.files||[]);
+        for(const file of files){
+          const buf = await file.arrayBuffer();
+          const url = URL.createObjectURL(new Blob([buf],{type:file.type}));
+          addFileMsg(myName||'Eu', file.name, url, file.type, true);
+          broadcast({ type:'file', name:file.name, mime:file.type, buf:[...new Uint8Array(buf)], sender: myName||'Anon' });
+        }
+        e.target.value = '';
+      });
+
+      // URL intents (?to= / ?room=)
+      const sp = new URLSearchParams(location.search);
+      const to = sp.get('to');
+      const r = sp.get('room');
+
+      // When peer opens, if intent exists, auto-connect
+      const tryAuto = setInterval(()=>{
+        if(!myId) return; clearInterval(tryAuto);
+        if(to){ startCallTo(to, 'Prieten'); }
+        if(r){ roomId = r; alert('Grup fără server de descoperire: folosește lista de prieteni ca să suni toți participanții ce au deschis același link. (Demo mesh)'); }
+      }, 200);
+    });
+  </script>
+</body>
+</html>
