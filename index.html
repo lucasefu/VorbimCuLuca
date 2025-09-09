@@ -2,198 +2,296 @@
 <html lang="ro">
 <head>
   <meta charset="UTF-8" />
+  <title>Il Separatio</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>MiniDiscord Luka</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.2/dist/peerjs.min.js"></script>
   <style>
-    body { font-family: Arial, sans-serif; margin:0; padding:0; background:#0b1020; color:white; }
-    .sidebar { width: 260px; background:#11182a; height:100vh; padding:15px; display:flex; flex-direction:column; }
-    .main { margin-left:260px; padding:15px; }
-    .btn { padding:5px 10px; border-radius:8px; cursor:pointer; }
-    .btn-add { border:1px solid #7c3aed; background:transparent; color:#7c3aed; font-weight:bold; }
-    .friend, .request { padding:5px; border-bottom:1px solid #222; display:flex; justify-content:space-between; align-items:center; }
-    .friend-name { flex:1; }
-    .chat-box { border:1px solid #222; padding:10px; height:300px; overflow:auto; margin-bottom:10px; }
-    .chat-input { display:flex; }
-    .chat-input input { flex:1; padding:5px; border-radius:5px; border:none; margin-right:5px; }
-    .chat-input button { padding:5px 10px; border-radius:5px; background:#7c3aed; border:none; color:white; }
-    audio { display:none; }
-    #spyPanel { background: #222; padding:10px; border-radius:8px; margin-bottom:10px; display:none; }
-    #spyPanel h3 { margin-top:0; }
-    .spy-list { margin-bottom:10px; }
-    .spy-btn { background:#e63946; color:white; border:none; padding:5px 12px; border-radius:6px; cursor:pointer; }
+    body { font-family: Arial, sans-serif; background: #181a24; color: #f7f7f7; margin:0; }
+    h2 { color: #ffe066; margin-bottom: 10px; }
+    #sidebar { background: #222; padding: 10px; min-width: 200px; float:left; border-radius:8px; margin-right:20px;}
+    #chatArea { margin-left: 220px; padding: 10px; }
+    #chatBox { background:#1b1e2c; border-radius:10px; height:300px; overflow:auto; margin-bottom:10px; padding:8px; }
+    input, button { margin:5px; border-radius:6px; padding:6px; }
+    button { background:#ffb703; color:#222; border:none; cursor:pointer; font-weight:bold; }
+    button:active { background:#fb8500; }
+    #adminPanel { background: #ffe06622; padding:10px; border-radius:10px; margin-top:18px;}
+    #adminUsers button { margin-left:6px; }
+    img, video { border-radius:6px; margin:2px; }
+    @media (max-width: 900px) {
+      #sidebar { float:none; margin-right:0; min-width:auto; }
+      #chatArea { margin-left:0; }
+    }
   </style>
 </head>
 <body>
-  <div class="sidebar">
-    <h2>Bine ai venit pe site-ul lui Luka!</h2>
-    <input id="username" placeholder="Alege un nume unic" class="mb-2 p-1 rounded text-black" />
-    <h3>Prieteni</h3>
-    <div id="friendsList"></div>
-    <button class="btn btn-add" id="addFriendBtn">Adaugă</button>
-    <h3>Cereri</h3>
-    <div id="requestsList"></div>
-    <!-- Butonul de spionaj (vizibil doar pentru lucabos) -->
-    <button id="spyBtn" class="btn" style="margin-top:15px; background:#e63946; color:white; display:none;">Spionează</button>
-    <!-- Panou spionaj -->
-    <div id="spyPanel">
-      <h3>Microfoane active</h3>
-      <div class="spy-list" id="spyList"></div>
-      <button id="closeSpyPanel" class="btn" style="background:#555;">Închide</button>
+  <div id="main" style="display:none;">
+    <h2>Bine ai venit pe siteul <b>Il Separatio</b></h2>
+    <div id="sidebar">
+      <h3>Prieteni</h3>
+      <div id="friendsList"></div>
+      <h3>Cereri de prietenie</h3>
+      <div id="requestsList"></div>
+      <input id="addFriendInput" placeholder="Nume prieten" maxlength="10"/>
+      <button id="addFriendBtn">Adaugă prieten</button>
+      <div id="adminPanel" style="display:none;">
+        <h3>👑 Panel Admin</h3>
+        <div id="adminUsers"></div>
+      </div>
     </div>
-  </div>
-  <div class="main">
-    <div class="chat-box" id="chatBox"></div>
-    <div class="chat-input">
-      <input id="chatInput" placeholder="Scrie un mesaj..." />
+    <div id="chatArea">
+      <div id="chatBox"></div>
+      <input id="chatInput" maxlength="100" placeholder="Scrie un mesaj..." />
       <button id="sendBtn">Trimite</button>
+      <input type="file" id="fileInput" multiple />
+      <button id="callBtn">Sună</button>
     </div>
-    <button id="callBtn" class="btn" style="margin-top:10px;">Sună</button>
-    <!-- Audio pentru spionaj -->
-    <audio id="spyAudio" controls style="display:none;"></audio>
   </div>
+  <div id="register">
+    <h2>Bine ai venit pe siteul <b>Il Separatio</b></h2>
+    <input type="text" id="username" maxlength="10" placeholder="Nume (max 10 caractere)" />
+    <button onclick="register()">Crează cont</button>
+    <div id="registerMsg"></div>
+  </div>
+  <div id="bannedMsg" style="display:none;"></div>
 
-  <audio id="ringTone" src="https://www.soundjay.com/button/beep-07.wav" loop></audio>
+<script>
+let users = JSON.parse(localStorage.getItem('users') || '{}');
+let bans = JSON.parse(localStorage.getItem('bans') || '{}');
+let chats = JSON.parse(localStorage.getItem('chats') || '{}');
+let files = JSON.parse(localStorage.getItem('files') || '{}');
+let username, room, mute = false, muteExpires = null;
+let fileCount = {}, fileSize = {}, fileSent = {};
 
-  <script>
-    let peer = new Peer();
-    let myStream;
-    let friends = [];
-    let requests = [];
-    let username;
+function saveAll() {
+  localStorage.setItem('users', JSON.stringify(users));
+  localStorage.setItem('bans', JSON.stringify(bans));
+  localStorage.setItem('chats', JSON.stringify(chats));
+  localStorage.setItem('files', JSON.stringify(files));
+}
 
-    // Elements
-    const usernameInput = document.getElementById('username');
-    const friendsList = document.getElementById('friendsList');
-    const requestsList = document.getElementById('requestsList');
-    const chatBox = document.getElementById('chatBox');
-    const chatInput = document.getElementById('chatInput');
-    const sendBtn = document.getElementById('sendBtn');
-    const callBtn = document.getElementById('callBtn');
-    const ringTone = document.getElementById('ringTone');
-    const spyBtn = document.getElementById('spyBtn');
-    const spyPanel = document.getElementById('spyPanel');
-    const spyList = document.getElementById('spyList');
-    const closeSpyPanel = document.getElementById('closeSpyPanel');
-    const spyAudio = document.getElementById('spyAudio');
+function validName(name) {
+  return /^[a-zA-Z0-9]{1,10}$/.test(name);
+}
 
-    usernameInput.addEventListener('change',()=>{
-      username = usernameInput.value;
-      // Buton spionaj vizibil DOAR pentru lucabos
-      if(username === "lucabos"){
-        spyBtn.style.display = "block";
-      } else {
-        spyBtn.style.display = "none";
-        spyPanel.style.display = "none";
-      }
-    });
+function register() {
+  let value = document.getElementById('username').value;
+  if (!validName(value)) {
+    document.getElementById('registerMsg').innerText = 'Nume invalid!';
+    return;
+  }
+  if (users[value]) {
+    document.getElementById('registerMsg').innerText = 'Numele există deja!';
+    return;
+  }
+  if (bans[value] && bans[value] > Date.now()) {
+    document.getElementById('register').style.display = 'none';
+    document.getElementById('bannedMsg').style.display = 'block';
+    document.getElementById('bannedMsg').innerHTML = '<h2>😡 Imi pare rău, dar nu ești binevoit pentru comportamentul tău!</h2><div>Ai ban până la ' + new Date(bans[value]).toLocaleString() + '</div>';
+    return;
+  }
+  users[value] = { username: value, friends: [], requests: [], muted: false, muteExpires: null, isAdmin: value === "lucabos22" };
+  saveAll();
+  username = value;
+  document.getElementById('register').style.display = 'none';
+  document.getElementById('main').style.display = 'block';
+  if (username === 'lucabos22') document.getElementById('adminPanel').style.display = 'block';
+  setup();
+}
 
-    document.getElementById('addFriendBtn').addEventListener('click',()=>{
-      let name = prompt('Nume prieten');
-      let id = prompt('Peer ID prieten');
-      if(name && id){
-        requests.push({name,id});
-        renderRequests();
-      }
-    });
+function setup() {
+  let user = users[username];
+  mute = user.muted;
+  muteExpires = user.muteExpires;
+  room = username;
+  renderFriends(user.friends);
+  renderRequests(user.requests);
+  joinRoom(username);
+  renderMute();
+  if (username === 'lucabos22') loadAdminPanel();
+}
 
-    function renderFriends(){
-      friendsList.innerHTML='';
-      friends.forEach(f=>{
-        let div = document.createElement('div'); div.className='friend';
-        div.innerHTML=`<span class="friend-name">${f.name}</span>`;
-        friendsList.appendChild(div);
-      });
+function renderFriends(friends) {
+  let div = document.getElementById('friendsList');
+  div.innerHTML = '';
+  friends.forEach(f => {
+    let d = document.createElement('div');
+    d.innerHTML = f + ' <button onclick="startChat(\''+f+'\')">💬</button>';
+    div.appendChild(d);
+  });
+}
+
+function renderRequests(requests) {
+  let div = document.getElementById('requestsList');
+  div.innerHTML = '';
+  requests.forEach(r => {
+    let d = document.createElement('div');
+    d.innerHTML = r + ' <button onclick="acceptReq(\''+r+'\')">✅</button>';
+    div.appendChild(d);
+  });
+}
+
+function startChat(friend) {
+  room = [username, friend].sort().join('_');
+  joinRoom(room);
+  document.getElementById('chatBox').innerHTML = '';
+}
+
+function acceptReq(from) {
+  let user = users[username];
+  if (!user.friends.includes(from)) user.friends.push(from);
+  user.requests = user.requests.filter(r => r !== from);
+  if (!users[from].friends.includes(username)) users[from].friends.push(username);
+  saveAll();
+  setup();
+}
+
+document.getElementById('addFriendBtn').onclick = () => {
+  let to = document.getElementById('addFriendInput').value;
+  if (!validName(to)) return;
+  if (!users[to]) return;
+  if (!users[to].requests.includes(username) && username !== to) users[to].requests.push(username);
+  saveAll();
+  setup();
+  document.getElementById('addFriendInput').value = '';
+};
+
+document.getElementById('sendBtn').onclick = () => {
+  let txt = document.getElementById('chatInput').value;
+  if (!txt || mute) return;
+  addMsg(room, username, txt);
+  document.getElementById('chatInput').value = '';
+  renderChat(room);
+};
+
+function addMsg(room, from, text) {
+  if (!chats[room]) chats[room] = [];
+  chats[room].push({ from, text, ts: Date.now() });
+  saveAll();
+}
+
+function joinRoom(room) {
+  if (!chats[room]) chats[room] = [];
+  cleanChat(room);
+  renderChat(room);
+}
+
+function renderChat(room) {
+  let box = document.getElementById('chatBox');
+  box.innerHTML = '';
+  (chats[room]||[]).forEach(m => {
+    let div = document.createElement('div');
+    div.innerHTML = '<b>' + m.from + ':</b> ' + m.text;
+    box.appendChild(div);
+  });
+  (files[room]||[]).forEach(f => {
+    let div = document.createElement('div');
+    if(f.type.startsWith('image/')) {
+      div.innerHTML = '<b>' + f.from + ':</b> <img src="' + f.file + '" height="80"/>';
+    } else if(f.type.startsWith('video/')) {
+      div.innerHTML = '<b>' + f.from + ':</b> <video src="' + f.file + '" controls height="80"></video>';
+    } else {
+      div.innerHTML = '<b>' + f.from + ':</b> <a href="' + f.file + '" download="file">📎 Descărcare</a>';
     }
+    box.appendChild(div);
+  });
+}
 
-    function renderRequests(){
-      requestsList.innerHTML='';
-      requests.forEach(r=>{
-        let div = document.createElement('div'); div.className='request';
-        div.innerHTML=`<span class="friend-name">${r.name}</span>`;
-        let btn = document.createElement('button'); btn.textContent='Accept';
-        btn.onclick=()=>{ friends.push(r); requests = requests.filter(x=>x!=r); renderFriends(); renderRequests(); };
-        div.appendChild(btn);
-        requestsList.appendChild(div);
-      });
-    }
+document.getElementById('fileInput').onchange = function(e){
+  let fs = e.target.files;
+  let now = Date.now();
+  fileCount[username] = fileCount[username] || [];
+  fileSize[username] = fileSize[username] || 0;
+  fileSent[username] = fileSent[username] || [];
+  // Clean old files sent
+  fileSent[username] = fileSent[username].filter(ts => now - ts < 60000);
+  if (fileSent[username].length+fs.length > 5) return;
+  let totalSize = fileSize[username];
+  for(let i=0; i<fs.length; i++){
+    if(fs[i].size > 20*1024*1024) continue;
+    totalSize += fs[i].size;
+  }
+  if (totalSize > 100*1024*1024) return;
+  for(let i=0; i<fs.length; i++){
+    let f = fs[i];
+    let reader = new FileReader();
+    reader.onload = function(evt){
+      if (!files[room]) files[room] = [];
+      files[room].push({ from: username, file: evt.target.result, type: f.type, size: f.size, ts: now });
+      fileSent[username].push(now);
+      fileSize[username] += f.size;
+      saveAll();
+      renderChat(room);
+    };
+    reader.readAsDataURL(f);
+  }
+  e.target.value = '';
+};
 
-    sendBtn.addEventListener('click',()=>{
-      let msg = chatInput.value; if(!msg) return;
-      let div = document.createElement('div'); div.textContent=`${username||'Tu'}: ${msg}`;
-      chatBox.appendChild(div); chatInput.value=''; chatBox.scrollTop=chatBox.scrollHeight;
-    });
+function cleanChat(room) {
+  chats[room] = (chats[room]||[]).filter(m => m.ts > Date.now() - 10*60000);
+  files[room] = (files[room]||[]).filter(f => f.ts > Date.now() - 60000);
+  saveAll();
+}
 
-    callBtn.addEventListener('click', async()=>{
-      if(!username){ alert('Setează un nume mai întâi'); return; }
-      if(friends.length===0){ alert('Nu ai prieteni adăugați'); return; }
-      myStream = await navigator.mediaDevices.getUserMedia({audio:true});
-      friends.forEach(f=>{
-        const call = peer.call(f.id,myStream);
-        call.on('stream', stream=>{ /* Aici ar fi audio remote */ });
-        ringTone.play();
-      });
-    });
+setInterval(() => {
+  Object.keys(chats).forEach(cleanChat);
+  renderChat(room);
+}, 7000);
 
-    peer.on('call', call=>{
-      navigator.mediaDevices.getUserMedia({audio:true}).then(stream=>{
-        call.answer(stream);
-        call.on('stream', s=>{ /* Aici audio local */ });
-      });
-      ringTone.play();
-    });
+function renderMute() {
+  if (mute) {
+    document.getElementById('chatInput').disabled = true;
+    document.getElementById('chatBox').innerHTML = '<div style="color:red;font-size:20px;">Nu poți vorbi până la: ' + new Date(muteExpires).toLocaleString() + '</div>';
+  } else {
+    document.getElementById('chatInput').disabled = false;
+  }
+}
 
-    // ===================== SPIONAJ =====================
-    // Butonul de spionaj
-    spyBtn.addEventListener('click', ()=>{
-      // Arată panoul de spionaj
-      spyPanel.style.display = "block";
-      // Populează lista cu prieteni
-      spyList.innerHTML = '';
-      if(friends.length === 0){
-        spyList.innerHTML = "<div style='color:#ccc;'>Nu ai prieteni activi.</div>";
-        return;
-      }
-      friends.forEach(f=>{
-        let div = document.createElement('div');
-        div.style.display = "flex";
-        div.style.alignItems = "center";
-        div.style.justifyContent = "space-between";
-        div.style.marginBottom = "6px";
-        div.innerHTML = `<span>${f.name}</span>`;
-        const btn = document.createElement('button');
-        btn.textContent = "Ascultă";
-        btn.className = "spy-btn";
-        btn.onclick = ()=>{ spyListen(f.id, f.name); };
-        div.appendChild(btn);
-        spyList.appendChild(div);
-      });
-    });
+document.getElementById('callBtn').onclick = function() {
+  alert('Funcția de voice demo! Pentru voice real trebuie server backend!');
+};
 
-    closeSpyPanel.addEventListener('click', ()=>{
-      spyPanel.style.display = "none";
-      spyAudio.style.display = "none";
-      spyAudio.pause();
-      spyAudio.srcObject = null;
-    });
-
-    // Funcția de spionaj: ascultă microfonul prietenului
-    function spyListen(peerId, friendName){
-      // Inițiază doar ascultare audio fără notificare extra
-      const call = peer.call(peerId, null); // null = nu trimite stream de la lucabos
-      call.on('stream', stream=>{
-        // Redă audio remote (microfon prieten)
-        spyAudio.style.display = "block";
-        spyAudio.srcObject = stream;
-        spyAudio.play();
-      });
-      // Poți adăuga aici un indicator în UI
-      spyPanel.style.display = "none";
-      chatBox.innerHTML += `<div style="color:#e63946;font-size:12px;">[Spionezi microfonul lui ${friendName}]</div>`;
-    }
-    // ===============================================
-
-  </script>
+// Admin panel
+function loadAdminPanel() {
+  let div = document.getElementById('adminUsers');
+  div.innerHTML = '';
+  Object.values(users).forEach(u => {
+    let userDiv = document.createElement('div');
+    userDiv.innerHTML = '<span>' + u.username + '</span>' +
+      '<button onclick="adminMute(\''+u.username+'\')">🔇 Mute</button>' +
+      '<button onclick="adminUnmute(\''+u.username+'\')">🔈 Unmute</button>' +
+      '<button onclick="adminBan(\''+u.username+'\')">🚫 Interzice</button>' +
+      '<button onclick="adminUnban(\''+u.username+'\')">✅ Anulează</button>' +
+      '<button onclick="adminSpy(\''+u.username+'\')">🕵️ Spionează</button>';
+    div.appendChild(userDiv);
+  });
+}
+function adminMute(user) {
+  let time = prompt('Minute de mute?');
+  if (!users[user]) return;
+  users[user].muted = true;
+  users[user].muteExpires = Date.now() + parseInt(time)*60000;
+  saveAll();
+  if(user === username) setup();
+}
+function adminUnmute(user) {
+  if (!users[user]) return;
+  users[user].muted = false;
+  users[user].muteExpires = null;
+  saveAll();
+  if(user === username) setup();
+}
+function adminBan(user) {
+  let time = prompt('Minute de ban?');
+  bans[user] = Date.now() + parseInt(time)*60000;
+  saveAll();
+}
+function adminUnban(user) {
+  bans[user] = 0;
+  saveAll();
+}
+function adminSpy(user) {
+  alert('Admin poate „spiona” userul: ' + user + ' (demo) 👑');
+}
+</script>
 </body>
 </html>
